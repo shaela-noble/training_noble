@@ -1,0 +1,121 @@
+---
+title: "Data Visualization"
+format: html
+---
+
+## Load packages
+```{r load packages}
+### Data wrangling
+library(readr)
+library(here)      ### for robust relative file paths
+library(dplyr)
+library(tidyr)
+library(forcats)   ### tools for working with factors (e.g., reordering)
+library(janitor)   ### clean column names
+
+### Visualization
+library(ggplot2)
+
+### Interactive output
+library(plotly)
+```
+
+## Load the data
+```{r read in data}
+delta_visits_raw <- read_csv(here("data/Socioecologocial_monitoring_data.csv"))
+```
+
+## Explore the data
+```{r data exploration}
+colnames(delta_visits_raw)
+glimpse(delta_visits_raw)
+```
+
+## Clean up the data
+```{r clean column names}
+delta_visits <- delta_visits_raw %>% 
+    clean_names()
+delta_visits
+```
+
+```{r switch to long format}
+visits_long <- delta_visits %>% 
+    pivot_longer(
+        col = c(sm_boat, med_boat, lrg_boat, bank_angler, scientist, cars),
+        names_to = "visitor_type",
+        values_to = "quantity",
+    ) %>% 
+    rename(restore_loc = eco_restore_approximate_location) %>% 
+    select(-notes)
+glimpse(visits_long)
+```
+
+```{r create new summary column}
+daily_visits_loc <- visits_long %>% 
+    group_by(restore_loc, date, visitor_type) %>% 
+    summarize(daily_visits = sum(quantity),
+    .groups = "drop")
+```
+
+## Make some plots
+```{r}
+ggplot(daily_visits_loc, 
+    aes(x = restore_loc, y = daily_visits)) +
+    geom_col()
+```
+
+
+```{r}
+daily_visits_loc %>% 
+    filter(daily_visits < 30,
+            visitor_type %in% c("sm_boat", "med_boat", "lrg_boat")) %>% 
+    ggplot(data = ., aes(x = restore_loc, y = daily_visits)) +
+    geom_col()
+```
+
+```{r}
+daily_visits_loc %>% 
+    ggplot(aes(y = restore_loc, x = daily_visits, fill = visitor_type)) + 
+    geom_col() + 
+    labs(x = "Number of visits",
+    y = "Restoration Location",
+    fill = "Visitor Type",
+    title = "Total visits to the restoration areas",
+    subtitle = "Sum of all visits between July and March 2019"
+    ) +
+    scale_x_continuous(breaks = seq(0, 120, 20), expand = c(0, 0))
+
+```
+
+```{r}
+daily_visits_totals <- daily_visits_loc %>%
+  group_by(restore_loc) %>%
+  mutate(total = sum(daily_visits)) %>%
+  ungroup() %>%
+  mutate(restore_loc = fct_reorder(restore_loc, desc(total)))
+```
+```{r}
+facet_plot <- ggplot(data = daily_visits_totals,
+       aes(x = visitor_type, y = daily_visits,
+           fill = visitor_type)) +
+    geom_col() +
+    facet_wrap(~restore_loc,
+               scales = "free_y",
+               ncol   = 5,
+               nrow   = 2) +
+    scale_fill_viridis_d() +
+    labs(x        = "Type of visitor",
+         y        = "Number of Visits",
+         title    = "Total Number of Visits to Delta Restoration Areas",
+         subtitle = "Sum of all visits during study period") +
+    theme_bw() +
+    theme(legend.position = "bottom",
+          axis.ticks.x    = element_blank(),
+          axis.text.x     = element_blank())
+
+facet_plot
+```
+
+```{r}
+ggplotly(facet_plot, tooltip = c('x', 'y'))
+```
