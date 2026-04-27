@@ -1,0 +1,107 @@
+---
+title: "Untitled"
+format: html
+---
+# Clean and wrangle data
+## Set up
+
+```{r setup}
+library(dplyr)
+library(tidyr)
+library(readr)
+```
+
+## Source data
+### Read data
+
+```{r read data}
+catch_original <- read_csv("https://knb.ecoinformatics.org/knb/d1/mn/v2/object/df35b.302.1")
+```
+
+```{r data exploration}
+colnames(catch_original)
+head(catch_original)
+summary(catch_original)
+glimpse(catch_original)
+```
+
+### Clean and reshape data
+
+```{r}
+catch_data <- catch_original %>% 
+    select(Region, Year, Chinook, Sockeye, Coho, Pink, Chum)
+```
+
+```{r}
+catch_clean <- catch_data %>% 
+    mutate(Chinook = if_else(
+        Chinook == "I",
+        true = "1",
+        false = Chinook),
+    Chinook = as.numeric(Chinook))
+```
+
+```{r}
+which(is.na(catch_clean$Chinook))
+catch_data[which(is.na(catch_clean$Chinook)), ]
+```
+
+### Pivot wider to longer
+
+```{r}
+catch_long <- catch_clean %>% 
+    pivot_longer(cols = -c(Region, Year),
+    names_to = "species",
+    values_to = "catch_thousands")
+```
+
+### Pivot longer to wider
+
+```{r}
+catch_wide <- catch_long %>% 
+    pivot_wider(names_from = species,
+    values_from = catch_thousands,
+    values_fill = 0)
+```
+
+### Convert to fish numbers
+
+```{r}
+catch_long <- catch_long %>% 
+    mutate(catch = catch_thousands *1000) %>% 
+    select(-catch_thousands)
+```
+
+```{r}
+mean_region <- catch_long %>% 
+    group_by(Region) %>% 
+    summarize(mean_catch = mean(catch, na.rm = TRUE),
+    .groups = "drop") %>% 
+    arrange(desc(mean_catch))
+```
+
+```{r}
+sse_catch <- catch_long %>% 
+    filter(Region == "SSE")
+```
+
+```{r}
+sites_df <- data.frame(site = c("HAW-101", "HAW-103", "OAH-320", "OAH-219", "MAU-039"))
+sites_df %>% 
+    separate_wider_delim(cols = site, delim = "-", names = c("island", "site_number"), cols_remove = F)
+
+# Check that out
+head(sites_df)
+```
+
+```{r}
+dates_df <- data.frame(
+    year  = rep(x = "1930", times = 3),
+    month = rep(x = "12",   times = 3),
+    day   = 14:16)
+dates_df %>% 
+    unite(col = date, year, month, day, sep = "-", remove = F)
+
+# Check that
+dates_df
+```
